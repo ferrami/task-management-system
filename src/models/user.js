@@ -2,100 +2,49 @@ const mongoose = require("mongoose");
 const validator = require("validator");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const Joi = require("joi");
+const passwordComplexity = require("joi-password-complexity");
 
-const userSchema = new mongoose.Schema(
-  {
-    firstName: { type: String, required: true, trim: true },
-    lastName: { type: String, required: true, trim: true },
-    email: {
-      type: String,
-      required: [true, "Please provide an Email!"],
-      unique: [true, "Email Exist"],
-      trim: true,
-      lowercase: true,
-      validate(value) {
-        if (!validator.isEmail(value)) {
-          throw new Error("Invalid email address");
-        }
-      },
-    },
-    password: {
-      type: String,
-      required: true,
-      trim: true,
-      minlength: 6,
-      validate(value) {
-        if (value.toLowerCase().includes("password")) {
-          throw new Error('Password cannot contain "password"');
-        }
-      },
-    },
-    verified: { type: Boolean, default: false },
-    tokens: [
-      {
-        token: {
-          type: String,
-          required: true,
-        },
-      },
-    ],
+const userSchema = new mongoose.Schema({
+  firstName: { type: String, required: true },
+  lastName: { type: String, required: true },
+  email: {
+    type: String,
+    required: [true, "Please provide an Email!"],
+    unique: [true, "Email Exist"],
   },
-  {
-    timestamps: true,
-  }
-);
-
-userSchema.virtual("tasks", {
-  ref: "Task",
-  localField: "_id",
-  foreignField: "owner",
+  password: { type: String, required: true },
+  verified: { type: Boolean, default: false },
+  tokens: [
+    {
+      token: {
+        type: String,
+        required: true,
+      },
+    },
+  ],
 });
 
-userSchema.methods.toJSON = function () {
-  const user = this.toObject();
-
-  delete user.password;
-  delete user.tokens;
-
-  return user;
-};
-
-userSchema.methods.generateAuthToken = async function () {
-  const user = this;
-  const token = jwt.sign({ _id: user._id.toString() }, process.env.JWT_SECRET);
-
-  user.tokens = user.tokens.concat({ token });
-  await user.save();
-
+userSchema.methods.generateAuthToken = function () {
+  const token = jwt.sign({ _id: this._id }, process.env.JWTPRIVATEKEY, {
+    expiresIn: "7d",
+  });
   return token;
 };
 
-userSchema.statics.findByCredentials = async (email, password) => {
-  const user = await User.findOne({ email });
+// You can include other methods like 'toJSON' and 'findByCredentials' if needed
 
-  if (!user) {
-    throw new Error("Invalid email or password");
-  }
-
-  const isMatch = await bcrypt.compare(password, user.password);
-
-  if (!isMatch) {
-    throw new Error("Invalid email or password");
-  }
-
-  return user;
+const validate = (data) => {
+  const schema = Joi.object({
+    firstName: Joi.string().required().label("First Name"),
+    lastName: Joi.string().required().label("Last Name"),
+    email: Joi.string().email().required().label("Email"),
+    password: passwordComplexity().required().label("Password"),
+  });
+  return schema.validate(data);
 };
 
-userSchema.pre("save", async function (next) {
-  const user = this;
+const User = mongoose.model("user", userSchema);
 
-  if (user.isModified("password")) {
-    user.password = await bcrypt.hash(user.password, 8);
-  }
-
-  next();
-});
-
-const User = mongoose.model("User", userSchema);
-
-module.exports = User;
+// export { User, validate };
+module.exports = { User, validate };

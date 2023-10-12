@@ -11,7 +11,7 @@ const userRouter = require("./routes/user");
 const taskRouter = require("./routes/task");
 
 // MongoDB import
-const connectDB = require("../config/mongodb");
+const connectDB = require("./config/mongodb");
 connectDB();
 
 const app = express();
